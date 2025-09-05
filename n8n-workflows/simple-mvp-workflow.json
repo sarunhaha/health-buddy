@@ -1,0 +1,296 @@
+{
+  "name": "Health Buddy MVP",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "LINE Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LINE events\nconst events = $input.item.json.body.events || [];\n\nif (events.length === 0) {\n  return [{json: {status: 'ok', message: 'No events'}}];\n}\n\nconst event = events[0];\nconst output = {\n  eventType: event.type,\n  userId: event.source?.userId,\n  groupId: event.source?.groupId,\n  isGroup: event.source?.type === 'group',\n  replyToken: event.replyToken,\n  message: event.message,\n  text: event.message?.text || '',\n  timestamp: new Date().toISOString()\n};\n\n// Detect intent from text\nif (output.text) {\n  if (output.text.match(/ทานยาแล้ว|ทานแล้ว|กินยาแล้ว/i)) {\n    output.intent = 'MEDICATION_TAKEN';\n  } else if (output.text.match(/ความดัน|วัดความดัน|bp|BP|\\d{2,3}\\/\\d{2,3}/i)) {\n    output.intent = 'VITALS_REPORT';\n  } else if (output.text.match(/ช่วย|ฉุกเฉิน|เจ็บ|หายใจไม่ออก|แน่นหน้าอก|ล้ม/i)) {\n    output.intent = 'EMERGENCY';\n  } else if (output.text.match(/สวัสดี|หวัดดี|hello/i)) {\n    output.intent = 'GREETING';\n  } else {\n    output.intent = 'OTHER';\n  }\n}\n\nreturn [output];"
+      },
+      "id": "parseEvent",
+      "name": "Parse Event & Detect Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "MEDICATION_TAKEN",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "ifMedication",
+      "name": "If Medication",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "EMERGENCY",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "ifEmergency",
+      "name": "If Emergency",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/medication_logs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "credential": "Supabase"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_line_id",
+              "value": "={{ $json.userId }}"
+            },
+            {
+              "name": "taken_at",
+              "value": "={{ $json.timestamp }}"
+            }
+          ]
+        }
+      },
+      "id": "logMedication",
+      "name": "Log to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "credential": "LINE API"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"replyToken\": \"{{ $('parseEvent').item.json.replyToken }}\",\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"✅ บันทึกการทานยาเรียบร้อยค่ะ\\nเก่งมากที่ทานยาตรงเวลา! 💊\",\n      \"quickReply\": {\n        \"items\": [\n          {\n            \"type\": \"action\",\n            \"action\": {\n              \"type\": \"message\",\n              \"label\": \"📊 ดูสรุปวันนี้\",\n              \"text\": \"ขอดูสรุปวันนี้\"\n            }\n          },\n          {\n            \"type\": \"action\",\n            \"action\": {\n              \"type\": \"message\",\n              \"label\": \"🩺 วัดความดัน\",\n              \"text\": \"จะวัดความดัน\"\n            }\n          }\n        ]\n      }\n    }\n  ]\n}"
+      },
+      "id": "replyMedication",
+      "name": "Reply Medication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "httpHeaderAuth": {
+          "credential": "LINE API"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"replyToken\": \"{{ $('parseEvent').item.json.replyToken }}\",\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"🚨 ได้แจ้งเตือนฉุกเฉินให้ครอบครัวแล้วค่ะ\\n\\nจะมีคนติดต่อกลับเร็วๆ นี้\\n\\nหากฉุกเฉินมาก โทร 1669 ได้เลยค่ะ\"\n    }\n  ]\n}"
+      },
+      "id": "replyEmergency",
+      "name": "Reply Emergency",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "content": "## 🎯 Health Buddy MVP Workflow\n\n### Features:\n1. **Webhook** - รับ events จาก LINE\n2. **Intent Detection** - แยกประเภทข้อความ\n3. **Medication Log** - บันทึกการทานยา\n4. **Emergency Alert** - แจ้งเตือนฉุกเฉิน\n5. **Quick Reply** - ปุ่มตอบกลับด่วน\n\n### Next Steps:\n- Add Vitals logging\n- Add Daily Report (22:00)\n- Add 18-hour Alert\n- Add AI Personas",
+        "height": 246.6176397506018,
+        "width": 323.0653949469305
+      },
+      "id": "note",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [180, 80]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"ok\" } }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "LINE Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Event & Detect Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Event & Detect Intent": {
+      "main": [
+        [
+          {
+            "node": "If Medication",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Emergency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Medication": {
+      "main": [
+        [
+          {
+            "node": "Log to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Emergency": {
+      "main": [
+        [
+          {
+            "node": "Reply Emergency",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Reply Medication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Medication": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Emergency": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

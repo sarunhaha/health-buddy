@@ -1,0 +1,39 @@
+{
+  "name": "health-buddy-line-oa",
+  "version": "1.0.0",
+  "description": "AI Health Companion for Elderly with Daily Family Reports",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "db:migrate": "node database/migrate.js",
+    "db:seed": "node database/seed.js",
+    "test": "jest",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@line/bot-sdk": "^9.4.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "express": "^4.21.0",
+    "dotenv": "^16.4.5",
+    "axios": "^1.7.2",
+    "node-cron": "^3.0.3",
+    "openai": "^4.52.7",
+    "dayjs": "^1.11.11",
+    "winston": "^3.13.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "joi": "^17.13.1",
+    "uuid": "^9.0.1",
+    "bull": "^4.15.0",
+    "redis": "^4.6.14"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4",
+    "jest": "^29.7.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.5.3",
+    "@types/node": "^20.14.9"
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "name": "Daily Report Generator",
+  "nodes": [
+    {
+      "id": "dailyReportCron",
+      "type": "n8n-nodes-base.cron",
+      "position": [250, 300],
+      "parameters": {
+        "triggerTimes": {
+          "item": [{
+            "hour": 22,
+            "minute": 0
+          }]
+        }
+      }
+    },
+    {
+      "id": "getAllUsers",
+      "type": "n8n-nodes-base.supabase",
+      "position": [450, 300],
+      "parameters": {
+        "operation": "getAll",
+        "table": "users",
+        "filters": {
+          "conditions": [{
+            "field": "opt_in",
+            "value": true
+          }]
+        }
+      }
+    },
+    {
+      "id": "getTodayLogs",
+      "type": "n8n-nodes-base.supabase",
+      "position": [650, 200],
+      "parameters": {
+        "operation": "getAll",
+        "table": "medication_logs",
+        "filters": {
+          "conditions": [
+            {
+              "field": "user_id",
+              "value": "={{$json.id}}"
+            },
+            {
+              "field": "created_at",
+              "operation": "gte",
+              "value": "={{new Date().toISOString().split('T')[0]}}T00:00:00"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "getVitalsLogs",
+      "type": "n8n-nodes-base.supabase",
+      "position": [650, 300],
+      "parameters": {
+        "operation": "getAll",
+        "table": "vitals_logs",
+        "filters": {
+          "conditions": [
+            {
+              "field": "user_id",
+              "value": "={{$json.id}}"
+            },
+            {
+              "field": "measured_at",
+              "operation": "gte",
+              "value": "={{new Date().toISOString().split('T')[0]}}T00:00:00"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "aiSummarize",
+      "type": "n8n-nodes-base.openAi",
+      "position": [850, 300],
+      "parameters": {
+        "operation": "text",
+        "model": "gpt-3.5-turbo",
+        "messages": {
+          "values": [{
+            "role": "system",
+            "content": "You are a health report AI. Summarize the daily health data in Thai. Format:\n- Mood: (emoji + short text)\n- Medication: X/Y doses taken\n- Vitals: BP/Glucose values if any\n- Notes: Key observations\n- Suggestion: 1 actionable tip"
+          }, {
+            "role": "user",
+            "content": "User: {{$node.getAllUsers.json.display_name}}\nMedications: {{$node.getTodayLogs.json}}\nVitals: {{$node.getVitalsLogs.json}}"
+          }]
+        }
+      }
+    },
+    {
+      "id": "createFlexMessage",
+      "type": "n8n-nodes-base.function",
+      "position": [1050, 300],
+      "parameters": {
+        "functionCode": "const summary = items[0].json.choices[0].message.content;\nconst lines = summary.split('\\n');\n\nreturn [{\n  json: {\n    type: 'flex',\n    altText: 'รายงานประจำวัน',\n    contents: {\n      type: 'bubble',\n      header: {\n        type: 'box',\n        layout: 'vertical',\n        contents: [{\n          type: 'text',\n          text: '📊 รายงานประจำวัน',\n          weight: 'bold',\n          size: 'lg'\n        }, {\n          type: 'text',\n          text: new Date().toLocaleDateString('th-TH'),\n          size: 'sm',\n          color: '#999'\n        }]\n      },\n      body: {\n        type: 'box',\n        layout: 'vertical',\n        contents: lines.map(line => ({\n          type: 'text',\n          text: line,\n          wrap: true\n        }))\n      }\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "getCaregivers",
+      "type": "n8n-nodes-base.supabase",
+      "position": [1250, 300],
+      "parameters": {
+        "operation": "getAll",
+        "table": "caregivers",
+        "filters": {
+          "conditions": [{
+            "field": "user_id",
+            "value": "={{$node.getAllUsers.json.id}}"
+          }, {
+            "field": "receive_daily_report",
+            "value": true
+          }]
+        }
+      }
+    },
+    {
+      "id": "sendReport",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{
+            "name": "Authorization",
+            "value": "Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"
+          }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [{
+            "name": "to",
+            "value": "={{$json.line_user_id}}"
+          }, {
+            "name": "messages",
+            "value": "={{[$node.createFlexMessage.json]}}"
+          }]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "dailyReportCron": {
+      "main": [["getAllUsers"]]
+    },
+    "getAllUsers": {
+      "main": [["getTodayLogs", "getVitalsLogs"]]
+    },
+    "getTodayLogs": {
+      "main": [["aiSummarize"]]
+    },
+    "getVitalsLogs": {
+      "main": [["aiSummarize"]]
+    },
+    "aiSummarize": {
+      "main": [["createFlexMessage"]]
+    },
+    "createFlexMessage": {
+      "main": [["getCaregivers"]]
+    },
+    "getCaregivers": {
+      "main": [["sendReport"]]
+    }
+  }
+}

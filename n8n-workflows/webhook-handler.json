@@ -1,0 +1,146 @@
+{
+  "name": "LINE Webhook Handler",
+  "nodes": [
+    {
+      "id": "webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-webhook",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      }
+    },
+    {
+      "id": "parseEvent",
+      "type": "n8n-nodes-base.function",
+      "position": [450, 300],
+      "parameters": {
+        "functionCode": "const events = items[0].json.body.events || [];\nreturn events.map(event => ({ json: event }));"
+      }
+    },
+    {
+      "id": "detectIntent",
+      "type": "n8n-nodes-base.switch",
+      "position": [650, 300],
+      "parameters": {
+        "dataPropertyName": "message.text",
+        "rules": [
+          {
+            "value": "ทานยาแล้ว|ทานแล้ว|กินยาแล้ว",
+            "regex": true,
+            "output": 0
+          },
+          {
+            "value": "ความดัน|วัดความดัน|bp|BP",
+            "regex": true,
+            "output": 1
+          },
+          {
+            "value": "ช่วย|ฉุกเฉิน|เจ็บ|หายใจไม่ออก|แน่นหน้าอก",
+            "regex": true,
+            "output": 2
+          }
+        ],
+        "fallbackOutput": 3
+      }
+    },
+    {
+      "id": "logMedication",
+      "type": "n8n-nodes-base.supabase",
+      "position": [850, 200],
+      "parameters": {
+        "operation": "insert",
+        "table": "medication_logs",
+        "columns": "user_id,taken_at",
+        "values": "={{$json.source.userId}},={{new Date().toISOString()}}"
+      }
+    },
+    {
+      "id": "replyMedication",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replyToken",
+              "value": "={{$json.replyToken}}"
+            },
+            {
+              "name": "messages",
+              "value": "[{\"type\":\"text\",\"text\":\"✅ บันทึกการทานยาเรียบร้อยค่ะ\\nเก่งมากที่ทานยาตรงเวลา! 💊\"}]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "emergencyAlert",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "to",
+              "value": "={{$json.caregiverLineId}}"
+            },
+            {
+              "name": "messages",
+              "value": "[{\"type\":\"text\",\"text\":\"🚨 ฉุกเฉิน!\\n{{$json.source.userId}} ต้องการความช่วยเหลือ\\nกรุณาติดต่อด่วน!\"}]"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "webhook": {
+      "main": [["parseEvent"]]
+    },
+    "parseEvent": {
+      "main": [["detectIntent"]]
+    },
+    "detectIntent": {
+      "main": [
+        ["logMedication"],
+        ["logVitals"],
+        ["emergencyAlert"],
+        ["aiResponse"]
+      ]
+    },
+    "logMedication": {
+      "main": [["replyMedication"]]
+    }
+  }
+}
