@@ -15,14 +15,25 @@ module.exports = async function handler(req, res) {
       
       // If n8n webhook URL exists and we have events, forward them
       if (process.env.N8N_WEBHOOK_URL && events.length > 0) {
+        // Forward to n8n with longer timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+        
         fetch(process.env.N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(req.body)
-        }).catch(err => {
-          console.error('n8n forward error:', err);
+          body: JSON.stringify(req.body),
+          signal: controller.signal
+        })
+        .then(response => {
+          clearTimeout(timeoutId);
+          console.log('n8n forward success:', response.status);
+        })
+        .catch(err => {
+          clearTimeout(timeoutId);
+          console.error('n8n forward error:', err.message);
         });
       }
       

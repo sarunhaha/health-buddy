@@ -1,0 +1,172 @@
+{
+  "name": "Image Analysis Node (เพิ่มใน workflow)",
+  "description": "Node สำหรับวิเคราะห์รูปความดัน - เพิ่มเข้าไปใน workflow หลัก",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.message.type }}",
+              "rightValue": "image",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "ifImage",
+      "name": "If Image Message",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 500],
+      "description": "ตรวจสอบว่าเป็นรูปภาพหรือไม่"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api-data.line.me/v2/bot/message/{{ $json.message.id }}/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "responseFormat": "file",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "getImageFromLine",
+      "name": "Get Image from LINE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "LINE API"
+        }
+      },
+      "description": "ดาวน์โหลดรูปจาก LINE"
+    },
+    {
+      "parameters": {
+        "resource": "chatCompletion",
+        "model": "gpt-4-vision-preview",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "คุณคือ 'พลอย' พยาบาลผู้ช่วยวิเคราะห์ค่าความดันโลหิต\n\nหน้าที่:\n1. อ่านค่าความดันจากรูป (SYS/DIA)\n2. ประเมินระดับความดัน:\n   - ปกติ: < 120/80\n   - สูงเล็กน้อย: 120-139/80-89\n   - สูงระดับ 1: 140-159/90-99\n   - สูงระดับ 2: ≥ 160/100\n   - วิกฤต: > 180/110\n3. ให้คำแนะนำเบื้องต้น (ไม่ใช่การรักษา)\n\nรูปแบบการตอบ:\n📊 ค่าความดัน: [SYS/DIA]\n📈 ระดับ: [ประเมิน]\n💡 คำแนะนำ: [คำแนะนำสั้นๆ]\n\nหากไม่เห็นค่าชัดเจน ให้ขอถ่ายใหม่"
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "ช่วยอ่านค่าความดันจากรูปนี้และประเมินให้หน่อยค่ะ"
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": "data:image/jpeg;base64,{{ $binary.data.data }}"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 300,
+          "temperature": 0.3
+        }
+      },
+      "id": "analyzeImage",
+      "name": "Analyze BP Image with GPT-4 Vision",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1050, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI"
+        }
+      },
+      "description": "วิเคราะห์รูปด้วย GPT-4 Vision"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format vision analysis response\nconst analysis = $json.choices[0].message.content;\nconst replyToken = $input.all()[0].json.replyToken;\nconst userId = $input.all()[0].json.userId;\n\n// Extract BP values if found\nlet bpMatch = analysis.match(/(\\d{2,3})\\/(\\d{2,3})/);\nlet logData = null;\n\nif (bpMatch) {\n  logData = {\n    bp_systolic: parseInt(bpMatch[1]),\n    bp_diastolic: parseInt(bpMatch[2]),\n    source: 'image',\n    timestamp: new Date().toISOString()\n  };\n}\n\n// Add quick reply for follow-up\nconst messages = [\n  {\n    type: 'text',\n    text: analysis,\n    quickReply: {\n      items: [\n        {\n          type: 'action',\n          action: {\n            type: 'message',\n            label: '💊 ทานยาแล้ว',\n            text: 'ทานยาแล้วค่ะ'\n          }\n        },\n        {\n          type: 'action',\n          action: {\n            type: 'message',\n            label: '📝 บันทึกเพิ่มเติม',\n            text: 'ต้องการบันทึกเพิ่มเติม'\n          }\n        },\n        {\n          type: 'action',\n          action: {\n            type: 'uri',\n            label: '📞 โทรหมอ',\n            uri: 'tel:1669'\n          }\n        }\n      ]\n    }\n  }\n];\n\nreturn {\n  json: {\n    replyToken: replyToken,\n    messages: messages,\n    log: logData ? {\n      type: 'vitals_image',\n      userId: userId,\n      vitals: logData\n    } : null\n  }\n};"
+      },
+      "id": "formatImageAnalysis",
+      "name": "Format Image Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500],
+      "description": "จัดรูปแบบคำตอบ + บันทึกค่า"
+    }
+  ],
+  "connections_to_add": {
+    "parseEvent": {
+      "main": [
+        [
+          {
+            "node": "ifImage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ifImage": {
+      "main": [
+        [
+          {
+            "node": "getImageFromLine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getImageFromLine": {
+      "main": [
+        [
+          {
+            "node": "analyzeImage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "analyzeImage": {
+      "main": [
+        [
+          {
+            "node": "formatImageAnalysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatImageAnalysis": {
+      "main": [
+        [
+          {
+            "node": "lineReply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
