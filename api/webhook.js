@@ -16,32 +16,21 @@ module.exports = async function handler(req, res) {
       
       // If n8n webhook URL exists and we have events, forward them
       if (process.env.N8N_WEBHOOK_URL && events.length > 0) {
-        console.log('Forwarding to n8n:', process.env.N8N_WEBHOOK_URL);
+        console.log('Forwarding to n8n (fire-and-forget)');
         
-        // Forward to n8n with longer timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
-        
+        // Fire and forget - don't wait for response
         fetch(process.env.N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(req.body),
-          signal: controller.signal
-        })
-        .then(response => {
-          clearTimeout(timeoutId);
-          console.log('n8n forward success:', response.status);
-          return response.text();
-        })
-        .then(text => {
-          console.log('n8n response:', text);
-        })
-        .catch(err => {
-          clearTimeout(timeoutId);
-          console.error('n8n forward error:', err.message);
+          body: JSON.stringify(req.body)
+        }).catch(err => {
+          // Log error but don't block
+          console.error('n8n forward error (non-blocking):', err.message);
         });
+        
+        console.log('Forwarded to n8n, not waiting for response');
       } else {
         console.log('Not forwarding:', {
           hasUrl: !!process.env.N8N_WEBHOOK_URL,
