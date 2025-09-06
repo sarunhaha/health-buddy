@@ -16,6 +16,8 @@ module.exports = async function handler(req, res) {
       
       // If n8n webhook URL exists and we have events, forward them
       if (process.env.N8N_WEBHOOK_URL && events.length > 0) {
+        console.log('Forwarding to n8n:', process.env.N8N_WEBHOOK_URL);
+        
         // Forward to n8n with longer timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
@@ -31,10 +33,19 @@ module.exports = async function handler(req, res) {
         .then(response => {
           clearTimeout(timeoutId);
           console.log('n8n forward success:', response.status);
+          return response.text();
+        })
+        .then(text => {
+          console.log('n8n response:', text);
         })
         .catch(err => {
           clearTimeout(timeoutId);
           console.error('n8n forward error:', err.message);
+        });
+      } else {
+        console.log('Not forwarding:', {
+          hasUrl: !!process.env.N8N_WEBHOOK_URL,
+          eventsLength: events.length
         });
       }
       
