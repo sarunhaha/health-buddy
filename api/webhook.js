@@ -12,6 +12,7 @@ module.exports = async function handler(req, res) {
       
       // Log events
       console.log('Events:', JSON.stringify(events));
+      console.log('N8N_WEBHOOK_URL:', process.env.N8N_WEBHOOK_URL ? 'Set' : 'Not set');
       
       // If n8n webhook URL exists and we have events, forward them
       if (process.env.N8N_WEBHOOK_URL && events.length > 0) {
