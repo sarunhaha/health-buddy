@@ -16,21 +16,47 @@ module.exports = async function handler(req, res) {
       
       // If n8n webhook URL exists and we have events, forward them
       if (process.env.N8N_WEBHOOK_URL && events.length > 0) {
-        console.log('Forwarding to n8n (fire-and-forget)');
+        console.log('Forwarding to n8n...');
         
-        // Fire and forget - don't wait for response
+        // Forward with timeout and better error handling
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
         fetch(process.env.N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(req.body)
-        }).catch(err => {
-          // Log error but don't block
-          console.error('n8n forward error (non-blocking):', err.message);
+          body: JSON.stringify(req.body),
+          signal: controller.signal
+        })
+        .then(response => {
+          clearTimeout(timeout);
+          console.log('n8n responded:', response.status);
+        })
+        .catch(err => {
+          clearTimeout(timeout);
+          // Log specific error
+          if (err.name === 'AbortError') {
+            console.error('n8n forward timeout after 5s');
+          } else {
+            console.error('n8n forward error:', err.message);
+          }
+          
+          // Optional: Retry once for network errors
+          if (err.message.includes('fetch failed')) {
+            console.log('Retrying n8n forward...');
+            fetch(process.env.N8N_WEBHOOK_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(req.body)
+            }).catch(retryErr => {
+              console.error('Retry also failed:', retryErr.message);
+            });
+          }
         });
         
-        console.log('Forwarded to n8n, not waiting for response');
+        console.log('Forward initiated to n8n');
       } else {
         console.log('Not forwarding:', {
           hasUrl: !!process.env.N8N_WEBHOOK_URL,
