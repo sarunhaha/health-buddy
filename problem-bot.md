@@ -4,21 +4,35 @@
 
 ## 🔴 Current Problems
 
-### 5. No LINE Reply Despite Successful Webhook
+### 5. Intermittent Webhook Failures
+**Status:** ✅ Resolved  
+**Problem:** Webhook บางครั้งทำงาน บางครั้ง fetch failed  
+**Root Cause:** Network instability และไม่มี retry mechanism
+**Solution:** เพิ่ม timeout, better error logging, และ auto-retry สำหรับ network failures
+
+**Fix Applied:**
+- [x] Add 5-second timeout to prevent hanging
+- [x] Add specific error logging for different failure types
+- [x] Implement auto-retry for fetch failed errors
+- [x] Better logging to track response status
+
+### 6. No LINE Reply Despite Successful Webhook
 **Status:** 🔄 In Progress  
-**Problem:** Webhook ทำงาน ไม่มี error แต่ไม่มีข้อความตอบกลับใน LINE  
+**Problem:** Webhook ทำงาน forward สำเร็จ แต่ไม่มีข้อความตอบกลับใน LINE  
+**Verified:** Vercel logs show "Forward initiated to n8n" without errors
 **Possible Causes:**
+- Parse Event node intent detection ไม่ทำงาน
+- IF nodes conditions ไม่ match 
 - LINE Reply node configuration issue
-- Token ไม่ครบหรือผิด
-- Reply token หมดอายุ (> 30 วินาที)
-- Workflow execution failed silently
+- Workflow stops at IF nodes (no fallback path)
 
 **Troubleshooting Steps:**
-- [ ] Check n8n Executions for success/failure
-- [ ] Verify LINE Reply node token is complete
-- [ ] Test with Test Workflow mode
-- [ ] Check if workflow reaches LINE Reply node
-- [ ] Verify Authorization header format
+- [x] Verify webhook reaches n8n successfully
+- [ ] Check Parse Event output for correct intent
+- [ ] Verify IF node conditions match intent
+- [ ] Check LINE Reply node Authorization header
+- [ ] Add fallback path for unmatched conditions
+- [ ] Test with simplified workflow
 
 ## 🔴 Previous Problems (Now Resolved)
 

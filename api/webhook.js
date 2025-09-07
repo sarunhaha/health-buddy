@@ -20,7 +20,7 @@ module.exports = async function handler(req, res) {
         
         // Forward with timeout and better error handling
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
         
         fetch(process.env.N8N_WEBHOOK_URL, {
           method: 'POST',
@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
           clearTimeout(timeout);
           // Log specific error
           if (err.name === 'AbortError') {
-            console.error('n8n forward timeout after 5s');
+            console.error('n8n forward timeout after 10s');
           } else {
             console.error('n8n forward error:', err.message);
           }
