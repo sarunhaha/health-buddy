@@ -16,21 +16,22 @@
 - [x] Implement auto-retry for fetch failed errors
 - [x] Better logging to track response status
 
-### 6. No n8n Execution Created
+### 6. Vercel to n8n Forward Not Working
 **Status:** 🔄 In Progress  
-**Problem:** Webhook returns 200 OK แต่ไม่มี execution ใน n8n  
-**Verified:** curl test returns 200 OK but "Could not find execution"
-**Possible Causes:**
-- Workflow is Inactive
-- Webhook node configuration issue
-- Response mode setting incorrect
+**Problem:** curl direct to n8n works, but LINE → Vercel → n8n doesn't create execution
+**Verified:** 
+- curl to n8n directly = works ✅
+- curl to Vercel = returns 200 but no n8n execution ❌
+- Vercel logs show "Forward initiated to n8n"
 
+**Root Cause:** Likely Vercel production env vars not updated
 **Troubleshooting Steps:**
-- [x] Test webhook URL directly - returns 200 OK
-- [ ] Verify workflow is Active (not Inactive)
-- [ ] Check webhook node path matches
-- [ ] Test with "Test Workflow" mode
-- [ ] Create simple test workflow
+- [x] Test n8n webhook directly - works
+- [x] Test via Vercel endpoint - returns 200 but no execution
+- [x] Add response logging to debug
+- [ ] Verify Vercel production env vars
+- [ ] Check if env vars are set for all environments
+- [ ] Redeploy after env var update
 
 ### 7. No LINE Reply Despite Successful Webhook  
 **Status:** 🔄 In Progress  

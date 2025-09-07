@@ -16,48 +16,48 @@ module.exports = async function handler(req, res) {
       
       // If n8n webhook URL exists and we have events, forward them
       if (process.env.N8N_WEBHOOK_URL && events.length > 0) {
-        console.log('Forwarding to n8n...');
+        console.log('Forwarding to n8n:', process.env.N8N_WEBHOOK_URL);
         
-        // Forward with timeout and better error handling
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-        
-        fetch(process.env.N8N_WEBHOOK_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(req.body),
-          signal: controller.signal
-        })
-        .then(async response => {
+        // Forward and actually wait for response
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 10000);
+          
+          const response = await fetch(process.env.N8N_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(req.body),
+            signal: controller.signal
+          });
+          
           clearTimeout(timeout);
           const responseText = await response.text();
-          console.log('n8n responded:', response.status, responseText ? responseText.substring(0, 100) : 'empty');
-        })
-        .catch(err => {
-          clearTimeout(timeout);
-          // Log specific error
+          console.log('n8n responded:', response.status, responseText ? responseText.substring(0, 200) : 'empty');
+          
+        } catch (err) {
           if (err.name === 'AbortError') {
             console.error('n8n forward timeout after 10s');
           } else {
-            console.error('n8n forward error:', err.message);
+            console.error('n8n forward error:', err.message, err.cause);
           }
           
-          // Optional: Retry once for network errors
+          // Retry once
           if (err.message.includes('fetch failed')) {
             console.log('Retrying n8n forward...');
-            fetch(process.env.N8N_WEBHOOK_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(req.body)
-            }).catch(retryErr => {
+            try {
+              const retryResponse = await fetch(process.env.N8N_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(req.body)
+              });
+              console.log('Retry responded:', retryResponse.status);
+            } catch (retryErr) {
               console.error('Retry also failed:', retryErr.message);
-            });
+            }
           }
-        });
-        
-        console.log('Forward initiated to n8n');
+        }
       } else {
         console.log('Not forwarding:', {
           hasUrl: !!process.env.N8N_WEBHOOK_URL,
