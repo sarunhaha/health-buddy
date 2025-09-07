@@ -16,23 +16,37 @@
 - [x] Implement auto-retry for fetch failed errors
 - [x] Better logging to track response status
 
-### 6. No LINE Reply Despite Successful Webhook
+### 6. No n8n Execution Created
 **Status:** 🔄 In Progress  
-**Problem:** Webhook ทำงาน forward สำเร็จ แต่ไม่มีข้อความตอบกลับใน LINE  
-**Verified:** Vercel logs show "Forward initiated to n8n" without errors
+**Problem:** Webhook returns 200 OK แต่ไม่มี execution ใน n8n  
+**Verified:** curl test returns 200 OK but "Could not find execution"
 **Possible Causes:**
-- Parse Event node intent detection ไม่ทำงาน
-- IF nodes conditions ไม่ match 
-- LINE Reply node configuration issue
-- Workflow stops at IF nodes (no fallback path)
+- Workflow is Inactive
+- Webhook node configuration issue
+- Response mode setting incorrect
 
 **Troubleshooting Steps:**
-- [x] Verify webhook reaches n8n successfully
-- [ ] Check Parse Event output for correct intent
-- [ ] Verify IF node conditions match intent
-- [ ] Check LINE Reply node Authorization header
-- [ ] Add fallback path for unmatched conditions
-- [ ] Test with simplified workflow
+- [x] Test webhook URL directly - returns 200 OK
+- [ ] Verify workflow is Active (not Inactive)
+- [ ] Check webhook node path matches
+- [ ] Test with "Test Workflow" mode
+- [ ] Create simple test workflow
+
+### 7. No LINE Reply Despite Successful Webhook  
+**Status:** 🔄 In Progress  
+**Problem:** Webhook forward สำเร็จ แต่ไม่มีข้อความตอบกลับใน LINE  
+**Possible Causes:**
+- Workflow execution timeout
+- Parse Event node intent detection issues
+- IF nodes conditions don't match
+- No fallback path for unmatched conditions
+
+**Troubleshooting Steps:**
+- [x] Verify webhook reaches n8n 
+- [ ] Simplify workflow for testing
+- [ ] Check Parse Event output
+- [ ] Add default/fallback reply path
+- [ ] Test with fixed text reply
 
 ## 🔴 Previous Problems (Now Resolved)
 

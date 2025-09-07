@@ -30,9 +30,10 @@ module.exports = async function handler(req, res) {
           body: JSON.stringify(req.body),
           signal: controller.signal
         })
-        .then(response => {
+        .then(async response => {
           clearTimeout(timeout);
-          console.log('n8n responded:', response.status);
+          const responseText = await response.text();
+          console.log('n8n responded:', response.status, responseText ? responseText.substring(0, 100) : 'empty');
         })
         .catch(err => {
           clearTimeout(timeout);
