@@ -56,6 +56,7 @@ LINE User → LINE Webhook → Vercel (Forward) → n8n Cloud (Process) → LINE
 ### 🔄 In Progress
 - Update Vercel environment with n8n webhook URL
 - Activate n8n workflow
+- Transitioning from Supabase to Airtable
 
 ### 📝 Pending Tasks
 - Test medication logging feature
@@ -147,6 +148,15 @@ Send these messages in LINE to test:
 1. **403 Webhook Error**: Fixed by simplifying webhook to always return 200 OK
 2. **Nodes not connecting**: Fixed in `health-buddy-mvp-fixed.json` using IF nodes
 3. **Token truncation**: Use full token from .env.local
+
+## ⚠️ IMPORTANT - AI WORK RULES
+
+**MUST READ:** `AI-WORK-RULES.md` - Contains critical rules to prevent repeated mistakes
+- Checklist for validation
+- Common errors to avoid
+- Correct formats for all nodes
+- Step-by-step testing approach
+- **Updated 2025-01-27**: Correct Airtable node operations from actual n8n UI
 
 ## 📞 Support
 

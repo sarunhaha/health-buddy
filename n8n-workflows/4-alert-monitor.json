@@ -1,0 +1,337 @@
+{
+  "name": "4. Alert Monitor (18-hour rule)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours", 
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule_trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblIJdbBY1D0l5AK7"
+        },
+        "filterByFormula": "={{ \"{fldyik3dWRYvkwo92} = TRUE()\" }}",
+        "options": {}
+      },
+      "id": "get_patients",
+      "name": "Get Active Patients",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split_batch",
+      "name": "Split Batch",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpIFnGmNyVHHMER"
+        },
+        "filterByFormula": "={{ \"{fldBEStpwfc2zPDor} = \" + $json.fields.patientId }}",
+        "sort": [
+          {
+            "field": "timestamp",
+            "direction": "desc"
+          }
+        ],
+        "limit": 1,
+        "options": {}
+      },
+      "id": "get_last_activity",
+      "name": "Get Last Activity",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const patient = $items[0].json.fields;\nconst lastActivity = $items[1] ? $items[1].json.fields : null;\n\nif (!lastActivity) {\n  // No activity ever\n  return {\n    needAlert: true,\n    patientId: patient.patientId,\n    patientName: patient.patientName,\n    displayName: patient.displayName,\n    caregivers: JSON.parse(patient.caregivers || '[]'),\n    noReplyHours: patient.noReplyHours || 18,\n    alertType: 'no_activity',\n    message: `⚠️ แจ้งเตือน: คุณ${patient.displayName} ยังไม่มีการใช้งานเลย`\n  };\n}\n\n// Calculate hours since last activity\nconst lastTime = new Date(lastActivity.timestamp);\nconst now = new Date();\nconst hoursDiff = (now - lastTime) / (1000 * 60 * 60);\n\nconst noReplyHours = patient.noReplyHours || 18;\n\nif (hoursDiff > noReplyHours) {\n  return {\n    needAlert: true,\n    patientId: patient.patientId,\n    patientName: patient.patientName,\n    displayName: patient.displayName,\n    caregivers: JSON.parse(patient.caregivers || '[]'),\n    noReplyHours,\n    hoursSinceActivity: Math.round(hoursDiff),\n    lastActivityTime: lastTime.toISOString(),\n    alertType: 'no_response',\n    message: `🚨 แจ้งเตือนด่วน!\\n\\nคุณ${patient.displayName} ไม่มีการตอบกลับมากกว่า ${Math.round(hoursDiff)} ชั่วโมงแล้ว\\n\\nกิจกรรมล่าสุด: ${lastActivity.taskType} เมื่อ ${lastTime.toLocaleString('th-TH')}\\n\\nกรุณาติดต่อตรวจสอบด่วน!`\n  };\n}\n\nreturn {\n  needAlert: false,\n  patientId: patient.patientId,\n  hoursSinceActivity: Math.round(hoursDiff)\n};"
+      },
+      "id": "check_alert",
+      "name": "Check Alert Condition",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needAlert }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "need_alert",
+      "name": "Need Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpIFnGmNyVHHMER"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ $json.patientId }}"
+            },
+            {
+              "fieldName": "patientName",
+              "fieldValue": "={{ $json.patientName }}"
+            },
+            {
+              "fieldName": "taskType",
+              "fieldValue": "alert"
+            },
+            {
+              "fieldName": "value",
+              "fieldValue": "{{ $json.alertType === 'no_response' ? 'ไม่ตอบกลับเกิน ' + $json.noReplyHours + ' ชม.' : 'ไม่มีการใช้งาน' }}"
+            },
+            {
+              "fieldName": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldName": "source",
+              "fieldValue": "system"
+            },
+            {
+              "fieldName": "note",
+              "fieldValue": "Auto alert triggered"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "log_alert",
+      "name": "Log Alert",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1450, 250],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split_caregivers",
+      "name": "Split Caregivers",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [1650, 250]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "push",
+        "pushTo": "userId",
+        "userId": "={{ $json.lineId }}",
+        "messages": [
+          {
+            "type": "text",
+            "text": "{{ $node['check_alert'].json.message }}"
+          }
+        ]
+      },
+      "id": "send_alert",
+      "name": "Send Alert to Caregiver",
+      "type": "n8n-nodes-base.line",
+      "typeVersion": 1,
+      "position": [1850, 250],
+      "credentials": {
+        "lineApi": {
+          "id": "2",
+          "name": "LINE API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Get Active Patients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Patients": {
+      "main": [
+        [
+          {
+            "node": "Split Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Batch": {
+      "main": [
+        [
+          {
+            "node": "Get Last Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Activity": {
+      "main": [
+        [
+          {
+            "node": "Check Alert Condition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Alert Condition": {
+      "main": [
+        [
+          {
+            "node": "Need Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Alert?": {
+      "main": [
+        [
+          {
+            "node": "Log Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Alert": {
+      "main": [
+        [
+          {
+            "node": "Split Caregivers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Caregivers": {
+      "main": [
+        [
+          {
+            "node": "Send Alert to Caregiver",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Alert to Caregiver": {
+      "main": [
+        [
+          {
+            "node": "Split Caregivers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "health-buddy-alert"
+  }
+}

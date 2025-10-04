@@ -1,0 +1,299 @@
+{
+  "name": "1. Main Webhook with AI & Conversational Registration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_entry",
+      "name": "LINE Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "webhookId": "line-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LINE webhook event\nconst event = $json.events?.[0];\n\nif (!event) {\n  return { error: 'No event data' };\n}\n\nreturn {\n  eventType: event.type,\n  messageType: event.message?.type || '',\n  messageText: event.message?.text || '',\n  userId: event.source?.userId || '',\n  groupId: event.source?.groupId || '',\n  roomId: event.source?.roomId || '',\n  replyToken: event.replyToken || '',\n  isGroup: event.source?.type === 'group',\n  isUser: event.source?.type === 'user',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "parse_event",
+      "name": "Parse Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.eventType }}",
+              "value2": "message"
+            }
+          ]
+        }
+      },
+      "id": "is_message",
+      "name": "Is Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detect intent from message\nconst text = $json.messageText.toLowerCase();\nconst userId = $json.userId;\nconst groupId = $json.groupId;\n\n// Registration keywords\nif (text.includes('ลงทะเบียน') || text === 'register' || text === 'สมัคร') {\n  return {\n    intent: 'registration',\n    confidence: 1.0,\n    ...$ json\n  };\n}\n\n// Connection code pattern (XXXX-9999 or #connect XXXX-9999)\nconst codePattern = /^(#connect\\s+)?([A-Z0-9]{4}-\\d{4})$/i;\nif (codePattern.test(text.trim())) {\n  return {\n    intent: 'connect',\n    connectionCode: text.match(codePattern)[2],\n    confidence: 1.0,\n    ...$json\n  };\n}\n\n// Health logging keywords\nif (text.includes('ทานยา') || text.includes('กินยา')) {\n  return { intent: 'medication', confidence: 0.9, ...$json };\n}\n\nif (text.includes('ความดัน') || text.match(/\\d+\\/\\d+/)) {\n  return { intent: 'blood_pressure', confidence: 0.9, ...$json };\n}\n\nif (text.includes('น้ำตาล')) {\n  return { intent: 'glucose', confidence: 0.9, ...$json };\n}\n\nif (text.includes('ดื่มน้ำ') || text.includes('น้ำ')) {\n  return { intent: 'water', confidence: 0.8, ...$json };\n}\n\nif (text.includes('เดิน') || text.includes('ออกกำลัง')) {\n  return { intent: 'exercise', confidence: 0.8, ...$json };\n}\n\n// Report request\nif (text.includes('รายงาน') || text.includes('สรุป') || text === 'ดูรายงาน') {\n  return { intent: 'report', confidence: 0.9, ...$json };\n}\n\n// Help request\nif (text === 'ช่วยเหลือ' || text === 'help') {\n  return { intent: 'help', confidence: 1.0, ...$json };\n}\n\n// Emergency keywords\nconst emergencyWords = ['ช่วย', 'แน่นหน้าอก', 'หายใจไม่ออก', 'ล้ม', 'ฉุกเฉิน'];\nif (emergencyWords.some(word => text.includes(word))) {\n  return { intent: 'emergency', confidence: 1.0, ...$json };\n}\n\n// Default: Send to AI chat\nreturn {\n  intent: 'ai_chat',\n  confidence: 0.5,\n  ...$json\n};"
+      },
+      "id": "detect_intent",
+      "name": "Detect Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 450]
+    },
+    {
+      "parameters": {
+        "rules": [
+          {
+            "field": "={{ $json.intent }}",
+            "operation": "equals",
+            "value": "registration"
+          },
+          {
+            "field": "={{ $json.intent }}",
+            "operation": "equals",
+            "value": "connect"
+          },
+          {
+            "field": "={{ $json.intent }}",
+            "operation": "equals",
+            "value": "medication"
+          },
+          {
+            "field": "={{ $json.intent }}",
+            "operation": "equals",
+            "value": "blood_pressure"
+          },
+          {
+            "field": "={{ $json.intent }}",
+            "operation": "equals",
+            "value": "emergency"
+          },
+          {
+            "field": "={{ $json.intent }}",
+            "operation": "equals",
+            "value": "ai_chat"
+          }
+        ]
+      },
+      "id": "route_intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpQeph1tVbhyhbW"
+        },
+        "filterByFormula": "={{ \"AND(FIND('\" + $json.userId + \"', {patientId}) > 0, FIND('REGISTRATION:', {note}) > 0)\" }}",
+        "sort": [
+          {
+            "field": "timestamp",
+            "direction": "desc"
+          }
+        ],
+        "limit": 1
+      },
+      "id": "get_reg_state",
+      "name": "Get Registration State",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1250, 200],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Conversational Registration State Machine\nconst userId = $json.userId;\nconst userMessage = $json.messageText;\nconst lastConvo = $items[0]?.json?.fields || {};\n\n// Parse state from last conversation\nlet currentState = 'START';\nlet regData = {};\n\nif (lastConvo.note) {\n  const match = lastConvo.note.match(/REGISTRATION:STATE:(\\w+):DATA:(.+)/);\n  if (match) {\n    currentState = match[1];\n    try {\n      regData = JSON.parse(match[2]);\n    } catch (e) {\n      regData = {};\n    }\n  }\n}\n\n// Reset if starting new registration\nif (userMessage === 'ลงทะเบียน' && currentState !== 'START') {\n  currentState = 'START';\n  regData = {};\n}\n\n// State transitions\nlet nextState = currentState;\nlet response = '';\nlet quickReply = null;\nlet shouldComplete = false;\n\nswitch(currentState) {\n  case 'START':\n    nextState = 'ASK_NAME';\n    response = `สวัสดีค่ะ ยินดีต้อนรับสู่ Health Buddy 🏥\\n\\nดิฉันคือพลอย พยาบาล AI ที่จะช่วยดูแลสุขภาพผู้สูงอายุค่ะ\\n\\nขอทราบชื่อ-นามสกุลของผู้สูงอายุที่ต้องการลงทะเบียนค่ะ\\n(ตัวอย่าง: คุณสมศรี ใจดี)`;\n    break;\n    \n  case 'ASK_NAME':\n    if (userMessage === 'ยกเลิก') {\n      nextState = 'CANCELLED';\n      response = 'ยกเลิกการลงทะเบียนแล้วค่ะ';\n    } else {\n      regData.patientName = userMessage;\n      nextState = 'ASK_NICKNAME';\n      response = `ขอทราบชื่อเล่นที่ใช้เรียกคุณ${userMessage.split(' ')[0]}ค่ะ\\n(เช่น คุณยาย, คุณแม่, คุณพ่อ)`;\n    }\n    break;\n    \n  case 'ASK_NICKNAME':\n    regData.displayName = userMessage;\n    nextState = 'ASK_GENDER';\n    response = `เพศของ${userMessage}ค่ะ`;\n    quickReply = {\n      items: [\n        {type: \"action\", action: {type: \"message\", label: \"👨 ชาย\", text: \"ชาย\"}},\n        {type: \"action\", action: {type: \"message\", label: \"👩 หญิง\", text: \"หญิง\"}}\n      ]\n    };\n    break;\n    \n  case 'ASK_GENDER':\n    regData.gender = userMessage === 'ชาย' ? 'male' : 'female';\n    nextState = 'ASK_DOB';\n    response = `วันเกิดของ${regData.displayName}ค่ะ\\n(รูปแบบ: วว/ดด/ปปปป เช่น 01/05/2498)`;\n    break;\n    \n  case 'ASK_DOB':\n    const datePattern = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/;\n    if (!datePattern.test(userMessage)) {\n      response = `⚠️ กรุณาใส่วันเกิดในรูปแบบ วว/ดด/ปปปป\\nเช่น 01/05/2498 ค่ะ`;\n    } else {\n      const [d, m, y] = userMessage.split('/');\n      regData.dateOfBirth = `${parseInt(y)-543}-${m}-${d}`;\n      nextState = 'ASK_DISEASES';\n      response = `${regData.displayName}มีโรคประจำตัวไหมคะ`;\n      quickReply = {\n        items: [\n          {type: \"action\", action: {type: \"message\", label: \"🩸 เบาหวาน\", text: \"เบาหวาน\"}},\n          {type: \"action\", action: {type: \"message\", label: \"💊 ความดัน\", text: \"ความดัน\"}},\n          {type: \"action\", action: {type: \"message\", label: \"❤️ หัวใจ\", text: \"หัวใจ\"}},\n          {type: \"action\", action: {type: \"message\", label: \"✅ ไม่มี\", text: \"ไม่มี\"}}\n        ]\n      };\n    }\n    break;\n    \n  case 'ASK_DISEASES':\n    regData.chronicDiseases = userMessage === 'ไม่มี' ? [] : [userMessage];\n    nextState = 'ASK_MEDICATIONS';\n    response = `มียาที่ทานประจำไหมคะ\\n(พิมพ์ชื่อยา หรือพิมพ์ \"ไม่มี\")`;\n    break;\n    \n  case 'ASK_MEDICATIONS':\n    if (userMessage !== 'ไม่มี') {\n      regData.medications = [{drug: userMessage, time: \"08:00\"}];\n    } else {\n      regData.medications = [];\n    }\n    nextState = 'ASK_CAREGIVER';\n    response = 'ขอทราบชื่อผู้ดูแลหลักค่ะ';\n    break;\n    \n  case 'ASK_CAREGIVER':\n    regData.caregiverName = userMessage;\n    nextState = 'ASK_RELATIONSHIP';\n    response = `${userMessage}เป็นอะไรกับ${regData.displayName}คะ`;\n    quickReply = {\n      items: [\n        {type: \"action\", action: {type: \"message\", label: \"👨‍👩‍👦 ลูก\", text: \"ลูก\"}},\n        {type: \"action\", action: {type: \"message\", label: \"👶 หลาน\", text: \"หลาน\"}},\n        {type: \"action\", action: {type: \"message\", label: \"💑 คู่สมรส\", text: \"คู่สมรส\"}},\n        {type: \"action\", action: {type: \"message\", label: \"👥 ญาติ\", text: \"ญาติ\"}}\n      ]\n    };\n    break;\n    \n  case 'ASK_RELATIONSHIP':\n    regData.caregiverRelation = userMessage;\n    nextState = 'ASK_PHONE';\n    response = `เบอร์โทรผู้ดูแลค่ะ\\n(สำหรับแจ้งเตือนฉุกเฉิน)`;\n    break;\n    \n  case 'ASK_PHONE':\n    regData.caregiverPhone = userMessage;\n    nextState = 'CONFIRM';\n    const age = Math.floor((Date.now() - new Date(regData.dateOfBirth)) / (365*24*60*60*1000));\n    response = `✅ ข้อมูลครบถ้วนแล้วค่ะ\\n\\n📋 สรุปข้อมูล:\\n👤 ผู้สูงอายุ: ${regData.displayName} (${regData.patientName})\\n📅 อายุ: ${age} ปี\\n💊 โรค: ${regData.chronicDiseases.join(', ') || 'ไม่มี'}\\n👩 ผู้ดูแล: ${regData.caregiverName} (${regData.caregiverRelation})\\n📞 เบอร์: ${regData.caregiverPhone}\\n\\nพิมพ์ \"ยืนยัน\" เพื่อลงทะเบียน\\nหรือ \"แก้ไข\" เพื่อเริ่มใหม่`;\n    break;\n    \n  case 'CONFIRM':\n    if (userMessage === 'ยืนยัน' || userMessage.includes('ยืนยัน')) {\n      nextState = 'COMPLETED';\n      shouldComplete = true;\n      const code = Math.random().toString(36).substring(2,6).toUpperCase() + '-' + Math.floor(Math.random() * 9000 + 1000);\n      regData.connectionCode = code;\n      response = `🎊 ลงทะเบียนสำเร็จ!\\n\\n👤 ผู้สูงอายุ: ${regData.displayName}\\n🔑 รหัสเชื่อมต่อ: ${code}\\n\\n📝 ขั้นตอนต่อไป:\\n1. สร้างกลุ่ม LINE ครอบครัว\\n2. เชิญ Health Buddy เข้ากลุ่ม\\n3. พิมพ์รหัส ${code} ในกลุ่ม\\n4. ระบบจะเชื่อมต่ออัตโนมัติ\\n\\n⚠️ รหัสนี้ใช้ได้ 7 วัน`;\n    } else if (userMessage === 'แก้ไข') {\n      nextState = 'ASK_NAME';\n      regData = {};\n      response = 'เริ่มใหม่ค่ะ\\n\\nขอทราบชื่อ-นามสกุลของผู้สูงอายุค่ะ';\n    } else {\n      response = 'กรุณาพิมพ์ \"ยืนยัน\" หรือ \"แก้ไข\" ค่ะ';\n    }\n    break;\n}\n\n// Handle cancel\nif (userMessage === 'ยกเลิก' && currentState !== 'START') {\n  nextState = 'CANCELLED';\n  response = 'ยกเลิกการลงทะเบียนแล้วค่ะ\\nหากต้องการลงทะเบียนใหม่ พิมพ์ \"ลงทะเบียน\" ได้เลยค่ะ';\n}\n\n// Save state\nconst stateNote = `REGISTRATION:STATE:${nextState}:DATA:${JSON.stringify(regData)}`;\n\nreturn {\n  userId,\n  currentState,\n  nextState,\n  response,\n  quickReply,\n  stateNote,\n  regData,\n  shouldComplete,\n  shouldSaveState: nextState !== 'COMPLETED' && nextState !== 'CANCELLED'\n};"
+      },
+      "id": "registration_flow",
+      "name": "Registration State Machine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblIJdbBY1D0l5AK7"
+        },
+        "filterByFormula": "={{ \"OR({fldjwWUSWBWlfkiEV} = '\" + $json.groupId + \"', FIND('\" + $json.userId + \"', {fld1iFRDYXPh4kzVX}) > 0)\" }}",
+        "limit": 1
+      },
+      "id": "find_patient",
+      "name": "Find Patient Profile",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1250, 700],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-3.5-turbo"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "คุณคือ 'พลอย' พยาบาล AI ของ Health Buddy ระบบดูแลสุขภาพผู้สูงอายุ\n\nบุคลิก:\n- เป็นผู้หญิงอายุ 30 ปี ใจดี อ่อนโยน\n- พูดจาสุภาพ ใช้คำลงท้าย 'ค่ะ' เสมอ\n- ห่วงใยผู้สูงอายุ พูดจาอบอุ่น\n- ให้กำลังใจและชื่นชมเมื่อผู้สูงอายุทำกิจกรรมดีๆ\n\nหน้าที่:\n1. ตอบคำถามเกี่ยวกับสุขภาพทั่วไป\n2. ให้คำแนะนำการดูแลสุขภาพพื้นฐาน\n3. พูดคุยให้กำลังใจ\n4. เตือนให้ทำกิจกรรมสุขภาพ\n\nข้อห้าม:\n- ไม่วินิจฉัยโรค\n- ไม่สั่งยา\n- ไม่แนะนำให้หยุดยาที่แพทย์สั่ง\n- หากเป็นเรื่องรุนแรง แนะนำให้ปรึกษาแพทย์\n\nตอบสั้นกระชับ ไม่เกิน 2-3 ประโยค"
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.messageText }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 150
+        }
+      },
+      "id": "openai_chat",
+      "name": "AI Chat (พลอย)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [1450, 700],
+      "credentials": {
+        "openAiApi": {
+          "id": "2",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build LINE reply message\nconst intent = $node['Detect Intent'].json.intent;\nconst replyToken = $node['Parse Event'].json.replyToken;\nlet messages = [];\nlet quickReply = null;\n\n// Route based on intent\nswitch(intent) {\n  case 'registration':\n    const regResponse = $node['Registration State Machine'].json;\n    messages.push({\n      type: 'text',\n      text: regResponse.response\n    });\n    if (regResponse.quickReply) {\n      messages[0].quickReply = regResponse.quickReply;\n    }\n    break;\n    \n  case 'medication':\n    messages.push({\n      type: 'text',\n      text: '✅ บันทึกการทานยาเรียบร้อยค่ะ\\nเก่งมากค่ะ! 💊',\n      quickReply: {\n        items: [\n          {type: \"action\", action: {type: \"message\", label: \"📊 ดูรายงาน\", text: \"ดูรายงาน\"}},\n          {type: \"action\", action: {type: \"message\", label: \"💬 คุยต่อ\", text: \"สบายดีไหมคะ\"}}\n        ]\n      }\n    });\n    break;\n    \n  case 'blood_pressure':\n    const bpMatch = $json.messageText.match(/(\\d+)\\/(\\d+)/);\n    if (bpMatch) {\n      const sys = parseInt(bpMatch[1]);\n      const dia = parseInt(bpMatch[2]);\n      let assessment = '';\n      \n      if (sys < 120 && dia < 80) {\n        assessment = 'ปกติดีค่ะ ✅';\n      } else if (sys < 140 && dia < 90) {\n        assessment = 'ค่อนข้างสูง ควรระวัง ⚠️';\n      } else {\n        assessment = 'สูง ควรปรึกษาแพทย์ 🔴';\n      }\n      \n      messages.push({\n        type: 'text',\n        text: `📊 บันทึกความดันโลหิตแล้วค่ะ\\n\\nค่าความดัน: ${sys}/${dia} mmHg\\nผลการประเมิน: ${assessment}`\n      });\n    }\n    break;\n    \n  case 'emergency':\n    messages.push({\n      type: 'text',\n      text: '🚨 ฉุกเฉิน!\\n\\nโปรดติดต่อ:\\n📞 1669 (การแพทย์ฉุกเฉิน)\\n\\nกำลังแจ้งเตือนผู้ดูแล...'\n    });\n    break;\n    \n  case 'ai_chat':\n    const aiResponse = $items[0]?.json?.output || 'สวัสดีค่ะ มีอะไรให้พลอยช่วยไหมคะ';\n    messages.push({\n      type: 'text',\n      text: aiResponse,\n      quickReply: {\n        items: [\n          {type: \"action\", action: {type: \"message\", label: \"💊 บันทึกยา\", text: \"ทานยาแล้ว\"}},\n          {type: \"action\", action: {type: \"message\", label: \"📊 บันทึกความดัน\", text: \"บันทึกความดัน\"}},\n          {type: \"action\", action: {type: \"message\", label: \"📈 ดูรายงาน\", text: \"ดูรายงาน\"}}\n        ]\n      }\n    });\n    break;\n    \n  default:\n    messages.push({\n      type: 'text',\n      text: 'ขอโทษค่ะ ไม่เข้าใจคำสั่ง กรุณาลองใหม่ค่ะ'\n    });\n}\n\nreturn {\n  replyToken,\n  messages\n};"
+      },
+      "id": "build_reply",
+      "name": "Build Reply Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 500]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "reply",
+        "replyToken": "={{ $json.replyToken }}",
+        "messages": "={{ $json.messages }}"
+      },
+      "id": "line_reply",
+      "name": "LINE Reply",
+      "type": "n8n-nodes-base.line",
+      "typeVersion": 1,
+      "position": [2050, 500],
+      "credentials": {
+        "lineNotifyApi": {
+          "id": "3",
+          "name": "LINE Messaging API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "webhook_response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2250, 500]
+    }
+  ],
+  "connections": {
+    "LINE Webhook": {
+      "main": [[{"node": "Parse Event", "type": "main", "index": 0}]]
+    },
+    "Parse Event": {
+      "main": [[{"node": "Is Message?", "type": "main", "index": 0}]]
+    },
+    "Is Message?": {
+      "main": [
+        [{"node": "Detect Intent", "type": "main", "index": 0}],
+        [{"node": "Webhook Response", "type": "main", "index": 0}]
+      ]
+    },
+    "Detect Intent": {
+      "main": [[{"node": "Route by Intent", "type": "main", "index": 0}]]
+    },
+    "Route by Intent": {
+      "main": [
+        [{"node": "Get Registration State", "type": "main", "index": 0}],
+        [{"node": "Find Patient Profile", "type": "main", "index": 0}],
+        [{"node": "Build Reply Message", "type": "main", "index": 0}],
+        [{"node": "Build Reply Message", "type": "main", "index": 0}],
+        [{"node": "Build Reply Message", "type": "main", "index": 0}],
+        [{"node": "AI Chat (พลอย)", "type": "main", "index": 0}]
+      ]
+    },
+    "Get Registration State": {
+      "main": [[{"node": "Registration State Machine", "type": "main", "index": 0}]]
+    },
+    "Registration State Machine": {
+      "main": [[{"node": "Build Reply Message", "type": "main", "index": 0}]]
+    },
+    "Find Patient Profile": {
+      "main": [[{"node": "AI Chat (พลอย)", "type": "main", "index": 0}]]
+    },
+    "AI Chat (พลอย)": {
+      "main": [[{"node": "Build Reply Message", "type": "main", "index": 0}]]
+    },
+    "Build Reply Message": {
+      "main": [[{"node": "LINE Reply", "type": "main", "index": 0}]]
+    },
+    "LINE Reply": {
+      "main": [[{"node": "Webhook Response", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "health-buddy-main-with-ai"
+  }
+}

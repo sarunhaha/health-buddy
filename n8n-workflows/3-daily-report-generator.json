@@ -1,0 +1,435 @@
+{
+  "name": "3. Daily Report Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 22 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule_trigger",
+      "name": "Every Day at 22:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblIJdbBY1D0l5AK7"
+        },
+        "filterByFormula": "={{ \"{fldyik3dWRYvkwo92} = TRUE()\" }}",
+        "options": {}
+      },
+      "id": "get_patients",
+      "name": "Get Active Patients",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split_batch",
+      "name": "Split Batch",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpIFnGmNyVHHMER"
+        },
+        "filterByFormula": "={{ \"AND({fldBEStpwfc2zPDor} = \" + $json.fields.patientId + \", IS_SAME({fldVMc6RsF6i3bLpG}, TODAY(), 'day'))\" }}",
+        "options": {}
+      },
+      "id": "get_activities",
+      "name": "Get Today Activities",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const patient = $items[0].json;\nconst activities = $items.slice(1);\n\n// Count activities by type\nconst taskCount = {\n  medication: 0,\n  vitals: 0,\n  water: 0,\n  walk: 0,\n  total: 0\n};\n\nactivities.forEach(item => {\n  if (item.json.fields) {\n    const taskType = item.json.fields.taskType;\n    if (taskCount[taskType] !== undefined) {\n      taskCount[taskType]++;\n    }\n    taskCount.total++;\n  }\n});\n\n// Calculate completion rate\nconst expectedTasks = 8; // 3 medications + 2 vitals + 3 water\nconst completionRate = Math.round((taskCount.total / expectedTasks) * 100);\n\n// Determine medal\nlet medal = '';\nif (completionRate >= 90) medal = '🥇 ทอง';\nelse if (completionRate >= 70) medal = '🥈 เงิน';\nelse if (completionRate >= 50) medal = '🥉 ทองแดง';\n\n// Check for alerts\nlet alerts = '';\nif (taskCount.medication === 0) alerts += 'ไม่ได้ทานยา ';\nif (taskCount.vitals === 0) alerts += 'ไม่ได้วัดความดัน ';\n\n// Generate summary\nconst summary = `\n📊 รายงานประจำวัน - ${patient.fields.displayName}\n\n✅ ความสำเร็จ: ${completionRate}% ${medal}\n💊 ทานยา: ${taskCount.medication} ครั้ง\n📊 วัดความดัน: ${taskCount.vitals} ครั้ง\n💧 ดื่มน้ำ: ${taskCount.water} ครั้ง\n\n${alerts ? '⚠️ แจ้งเตือน: ' + alerts : '✨ ทำกิจกรรมครบถ้วน'}\n`;\n\nreturn {\n  patientId: patient.fields.patientId,\n  patientName: patient.fields.patientName,\n  displayName: patient.fields.displayName,\n  groupId: patient.fields.groupId,\n  date: new Date().toISOString().split('T')[0],\n  completionRate,\n  medal,\n  tasksCompleted: taskCount.total,\n  tasksTotal: expectedTasks,\n  alerts,\n  notes: summary,\n  summary\n};"
+      },
+      "id": "calculate_report",
+      "name": "Calculate Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tbltk2woaegZGCpK2"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ $json.patientId }}"
+            },
+            {
+              "fieldName": "patientName",
+              "fieldValue": "={{ $json.patientName }}"
+            },
+            {
+              "fieldName": "date",
+              "fieldValue": "={{ $json.date }}"
+            },
+            {
+              "fieldName": "completionRate",
+              "fieldValue": "={{ $json.completionRate }}"
+            },
+            {
+              "fieldName": "medal",
+              "fieldValue": "={{ $json.medal }}"
+            },
+            {
+              "fieldName": "tasksCompleted",
+              "fieldValue": "={{ $json.tasksCompleted }}"
+            },
+            {
+              "fieldName": "tasksTotal",
+              "fieldValue": "={{ $json.tasksTotal }}"
+            },
+            {
+              "fieldName": "alerts",
+              "fieldValue": "={{ $json.alerts }}"
+            },
+            {
+              "fieldName": "notes",
+              "fieldValue": "={{ $json.notes }}"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "save_report",
+      "name": "Save Report",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.groupId }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "has_group",
+      "name": "Has Group?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "push",
+        "pushTo": "groupId",
+        "groupId": "={{ $node['calculate_report'].json.groupId }}",
+        "messages": [
+          {
+            "type": "flex",
+            "altText": "รายงานประจำวัน",
+            "contents": {
+              "type": "bubble",
+              "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": "📊 รายงานประจำวัน",
+                    "size": "lg",
+                    "weight": "bold",
+                    "color": "#FFFFFF"
+                  },
+                  {
+                    "type": "text",
+                    "text": "{{ $node['calculate_report'].json.displayName }}",
+                    "size": "sm",
+                    "color": "#FFFFFF"
+                  }
+                ],
+                "backgroundColor": "#2E7D32"
+              },
+              "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": "ความสำเร็จวันนี้",
+                    "size": "xs",
+                    "color": "#666666"
+                  },
+                  {
+                    "type": "text",
+                    "text": "{{ $node['calculate_report'].json.completionRate }}% {{ $node['calculate_report'].json.medal }}",
+                    "size": "xxl",
+                    "weight": "bold",
+                    "margin": "sm"
+                  },
+                  {
+                    "type": "separator",
+                    "margin": "lg"
+                  },
+                  {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "lg",
+                    "contents": [
+                      {
+                        "type": "text",
+                        "text": "💊 ทานยา",
+                        "size": "sm",
+                        "flex": 2
+                      },
+                      {
+                        "type": "text",
+                        "text": "✅ ครบ",
+                        "size": "sm",
+                        "align": "end",
+                        "flex": 1
+                      }
+                    ]
+                  },
+                  {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "md",
+                    "contents": [
+                      {
+                        "type": "text",
+                        "text": "📊 วัดความดัน",
+                        "size": "sm",
+                        "flex": 2
+                      },
+                      {
+                        "type": "text",
+                        "text": "✅ แล้ว",
+                        "size": "sm",
+                        "align": "end",
+                        "flex": 1
+                      }
+                    ]
+                  },
+                  {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "md",
+                    "contents": [
+                      {
+                        "type": "text",
+                        "text": "💧 ดื่มน้ำ",
+                        "size": "sm",
+                        "flex": 2
+                      },
+                      {
+                        "type": "text",
+                        "text": "✅ ครบ",
+                        "size": "sm",
+                        "align": "end",
+                        "flex": 1
+                      }
+                    ]
+                  }
+                ]
+              },
+              "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": "Health Buddy - ดูแลสุขภาพคุณทุกวัน",
+                    "size": "xxs",
+                    "color": "#999999",
+                    "align": "center"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "id": "send_report",
+      "name": "Send Report to Group",
+      "type": "n8n-nodes-base.line",
+      "typeVersion": 1,
+      "position": [1650, 250],
+      "credentials": {
+        "lineApi": {
+          "id": "2",
+          "name": "LINE API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day at 22:00": {
+      "main": [
+        [
+          {
+            "node": "Get Active Patients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Patients": {
+      "main": [
+        [
+          {
+            "node": "Split Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Batch": {
+      "main": [
+        [
+          {
+            "node": "Get Today Activities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today Activities": {
+      "main": [
+        [
+          {
+            "node": "Calculate Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Report": {
+      "main": [
+        [
+          {
+            "node": "Save Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Report": {
+      "main": [
+        [
+          {
+            "node": "Has Group?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Group?": {
+      "main": [
+        [
+          {
+            "node": "Send Report to Group",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report to Group": {
+      "main": [
+        [
+          {
+            "node": "Split Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "health-buddy-report"
+  }
+}

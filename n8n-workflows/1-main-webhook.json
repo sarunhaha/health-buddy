@@ -1,0 +1,939 @@
+{
+  "name": "1. Main LINE Webhook Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_entry",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "line-webhook"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "eventType",
+              "value": "={{ $json.events && $json.events[0] ? $json.events[0].type : 'unknown' }}"
+            },
+            {
+              "name": "messageType",
+              "value": "={{ $json.events && $json.events[0] && $json.events[0].message ? $json.events[0].message.type : '' }}"
+            },
+            {
+              "name": "messageText",
+              "value": "={{ $json.events && $json.events[0] && $json.events[0].message ? $json.events[0].message.text : '' }}"
+            },
+            {
+              "name": "userId",
+              "value": "={{ $json.events && $json.events[0] && $json.events[0].source ? $json.events[0].source.userId : '' }}"
+            },
+            {
+              "name": "groupId",
+              "value": "={{ $json.events && $json.events[0] && $json.events[0].source ? $json.events[0].source.groupId : '' }}"
+            },
+            {
+              "name": "replyToken",
+              "value": "={{ $json.events && $json.events[0] ? $json.events[0].replyToken : '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "parse_event",
+      "name": "Parse Event",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.eventType }}",
+              "value2": "message"
+            }
+          ]
+        }
+      },
+      "id": "is_message",
+      "name": "Is Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblIJdbBY1D0l5AK7"
+        },
+        "filterByFormula": "={{ \"OR({fldjwWUSWBWlfkiEV} = '\" + $json.groupId + \"', FIND('\" + $json.userId + \"', {fld1iFRDYXPh4kzVX}) > 0)\" }}",
+        "options": {
+          "limit": 1
+        }
+      },
+      "id": "find_patient",
+      "name": "Find Patient",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [850, 250],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length || 0 }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "has_patient",
+      "name": "Has Patient?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 250]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpQeph1tVbhyhbW"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ [$json[0].id] }}"
+            },
+            {
+              "fieldName": "senderRole",
+              "fieldValue": "={{ $json[0].fields.groupId === $('Parse Event').item.json.groupId ? 'patient' : 'caregiver' }}"
+            },
+            {
+              "fieldName": "senderName",
+              "fieldValue": "={{ $json[0].fields.displayName || 'Unknown' }}"
+            },
+            {
+              "fieldName": "messageType",
+              "fieldValue": "={{ $('Parse Event').item.json.messageType }}"
+            },
+            {
+              "fieldName": "messageContent",
+              "fieldValue": "={{ $('Parse Event').item.json.messageText }}"
+            },
+            {
+              "fieldName": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "log_conversation",
+      "name": "Log Conversation",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1250, 200],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "value": "={{ $json.messageText.toLowerCase() }}",
+        "rules": {
+          "rules": [
+            {
+              "operation": "contains",
+              "value": "ยา",
+              "output": 0
+            },
+            {
+              "operation": "contains",
+              "value": "ทานยา",
+              "output": 0
+            },
+            {
+              "operation": "contains",
+              "value": "ความดัน",
+              "output": 1
+            },
+            {
+              "operation": "contains",
+              "value": "วัดความดัน",
+              "output": 1
+            },
+            {
+              "operation": "contains",
+              "value": "น้ำ",
+              "output": 2
+            },
+            {
+              "operation": "contains",
+              "value": "ดื่มน้ำ",
+              "output": 2
+            },
+            {
+              "operation": "contains",
+              "value": "ช่วย",
+              "output": 3
+            },
+            {
+              "operation": "contains",
+              "value": "ฉุกเฉิน",
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": 4
+      },
+      "id": "detect_intent",
+      "name": "Detect Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpIFnGmNyVHHMER"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ $('Find Patient').item.json[0].fields.patientId }}"
+            },
+            {
+              "fieldName": "patientName",
+              "fieldValue": "={{ $('Find Patient').item.json[0].fields.patientName }}"
+            },
+            {
+              "fieldName": "taskType",
+              "fieldValue": "medication"
+            },
+            {
+              "fieldName": "value",
+              "fieldValue": "ทานยาแล้ว"
+            },
+            {
+              "fieldName": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldName": "source",
+              "fieldValue": "text"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "log_medication",
+      "name": "Log Medication",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1650, 100],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "✅ บันทึกการทานยาเรียบร้อยค่ะ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "med_response",
+      "name": "Med Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1850, 100]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpIFnGmNyVHHMER"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ $('Find Patient').item.json[0].fields.patientId }}"
+            },
+            {
+              "fieldName": "patientName",
+              "fieldValue": "={{ $('Find Patient').item.json[0].fields.patientName }}"
+            },
+            {
+              "fieldName": "taskType",
+              "fieldValue": "vitals"
+            },
+            {
+              "fieldName": "value",
+              "fieldValue": "วัดความดันแล้ว"
+            },
+            {
+              "fieldName": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldName": "source",
+              "fieldValue": "text"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "log_vitals",
+      "name": "Log Vitals",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1650, 200],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "📊 บันทึกความดันเรียบร้อยค่ะ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vitals_response",
+      "name": "Vitals Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpIFnGmNyVHHMER"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ $('Find Patient').item.json[0].fields.patientId }}"
+            },
+            {
+              "fieldName": "patientName",
+              "fieldValue": "={{ $('Find Patient').item.json[0].fields.patientName }}"
+            },
+            {
+              "fieldName": "taskType",
+              "fieldValue": "water"
+            },
+            {
+              "fieldName": "value",
+              "fieldValue": "ดื่มน้ำแล้ว"
+            },
+            {
+              "fieldName": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldName": "source",
+              "fieldValue": "text"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "log_water",
+      "name": "Log Water",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1650, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "💧 บันทึกการดื่มน้ำเรียบร้อยค่ะ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "water_response",
+      "name": "Water Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpIFnGmNyVHHMER"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ $('Find Patient').item.json[0].fields.patientId }}"
+            },
+            {
+              "fieldName": "patientName",
+              "fieldValue": "={{ $('Find Patient').item.json[0].fields.patientName }}"
+            },
+            {
+              "fieldName": "taskType",
+              "fieldValue": "alert"
+            },
+            {
+              "fieldName": "value",
+              "fieldValue": "ขอความช่วยเหลือฉุกเฉิน"
+            },
+            {
+              "fieldName": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldName": "source",
+              "fieldValue": "text"
+            },
+            {
+              "fieldName": "note",
+              "fieldValue": "EMERGENCY ALERT"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "log_emergency",
+      "name": "Log Emergency",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1650, 400],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "🚨 ได้รับแจ้งฉุกเฉิน! กำลังติดต่อผู้ดูแลค่ะ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "emergency_response",
+      "name": "Emergency Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1850, 400]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "สวัสดีค่ะ มีอะไรให้ช่วยคะ?"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "general_response",
+      "name": "General Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1850, 500]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "กรุณาลงทะเบียนก่อนใช้งานค่ะ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "no_patient",
+      "name": "No Patient",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1250, 350]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "ขอบคุณที่เข้าร่วมกลุ่มค่ะ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "non_message",
+      "name": "Non Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {},
+      "id": "merge_all",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "reply",
+        "replyToken": "={{ $('Parse Event').item.json.replyToken }}",
+        "messages": [
+          {
+            "type": "text",
+            "text": "={{ $json.message }}",
+            "quickReply": {
+              "items": [
+                {
+                  "type": "action",
+                  "action": {
+                    "type": "message",
+                    "label": "💊 ทานยา",
+                    "text": "ทานยาแล้ว"
+                  }
+                },
+                {
+                  "type": "action",
+                  "action": {
+                    "type": "message",
+                    "label": "📊 วัดความดัน",
+                    "text": "วัดความดันแล้ว"
+                  }
+                },
+                {
+                  "type": "action",
+                  "action": {
+                    "type": "message",
+                    "label": "💧 ดื่มน้ำ",
+                    "text": "ดื่มน้ำแล้ว"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "id": "line_reply",
+      "name": "LINE Reply",
+      "type": "n8n-nodes-base.line",
+      "typeVersion": 1,
+      "position": [2250, 300],
+      "credentials": {
+        "lineNotifyOAuth2Api": {
+          "id": "2",
+          "name": "LINE API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2450, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Event": {
+      "main": [
+        [
+          {
+            "node": "Is Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Message?": {
+      "main": [
+        [
+          {
+            "node": "Find Patient",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Non Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Patient": {
+      "main": [
+        [
+          {
+            "node": "Has Patient?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Patient?": {
+      "main": [
+        [
+          {
+            "node": "Log Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Patient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Conversation": {
+      "main": [
+        [
+          {
+            "node": "Detect Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Intent": {
+      "main": [
+        [
+          {
+            "node": "Log Medication",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Vitals",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Water",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Emergency",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "General Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Medication": {
+      "main": [
+        [
+          {
+            "node": "Med Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Med Response": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Vitals": {
+      "main": [
+        [
+          {
+            "node": "Vitals Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vitals Response": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Water": {
+      "main": [
+        [
+          {
+            "node": "Water Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Water Response": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Emergency": {
+      "main": [
+        [
+          {
+            "node": "Emergency Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emergency Response": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "General Response": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Patient": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Non Message": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "LINE Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LINE Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "health-buddy-main"
+  }
+}

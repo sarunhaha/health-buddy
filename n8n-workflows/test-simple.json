@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "instanceId": "test"
+  },
+  "nodes": [
+    {
+      "id": "e4a9b9b6-6c2b-4c1a-b091-e4681e170f88",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [300, 300],
+      "parameters": {}
+    },
+    {
+      "id": "68e5b2f4-2b3b-4d2e-8e3f-5a3b1c4d5e6f",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [500, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "abc123",
+              "name": "test",
+              "value": "hello",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-27T14:00:00.000Z",
+  "versionId": "abc123"
+}

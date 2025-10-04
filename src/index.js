@@ -5,7 +5,7 @@ const cors = require('cors');
 const { middleware } = require('@line/bot-sdk');
 const logger = require('./utils/logger');
 const { sequelize } = require('./models');
-const cronJobs = require('./services/cronJobs');
+// const cronJobs = require('./services/cronJobs'); // Commented out - file doesn't exist
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,8 +45,8 @@ async function startServer() {
     await sequelize.sync({ alter: true });
     logger.info('Database synchronized');
     
-    cronJobs.initializeJobs();
-    logger.info('Cron jobs initialized');
+    // cronJobs.initializeJobs(); // Commented out - file doesn't exist
+    // logger.info('Cron jobs initialized');
     
     app.listen(PORT, () => {
       logger.info(`Health Buddy server running on port ${PORT}`);

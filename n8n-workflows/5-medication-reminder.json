@@ -1,0 +1,323 @@
+{
+  "name": "5. Medication Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,12,19 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule_trigger",
+      "name": "3 Times Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const hour = new Date().getHours();\nlet timeSlot = '';\nlet emoji = '';\nlet greeting = '';\n\nif (hour === 8) {\n  timeSlot = 'morning';\n  emoji = '☀️';\n  greeting = 'อรุณสวัสดิ์ค่ะ';\n} else if (hour === 12) {\n  timeSlot = 'noon';\n  emoji = '🌤️';\n  greeting = 'สวัสดีตอนกลางวันค่ะ';\n} else if (hour === 19) {\n  timeSlot = 'evening';\n  emoji = '🌙';\n  greeting = 'สวัสดีตอนเย็นค่ะ';\n}\n\nreturn {\n  timeSlot,\n  emoji,\n  greeting,\n  hour\n};"
+      },
+      "id": "prepare_time",
+      "name": "Prepare Time Slot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblIJdbBY1D0l5AK7"
+        },
+        "filterByFormula": "={{ \"AND({fldyik3dWRYvkwo92} = TRUE(), {fldjwWUSWBWlfkiEV} != '')\" }}",
+        "options": {}
+      },
+      "id": "get_patients",
+      "name": "Get Active Patients with Group",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split_batch",
+      "name": "Split Batch",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblobt43DqolfUrIr"
+        },
+        "filterByFormula": "={{ \"{fld0N74gs8ysxstGo} = '\" + ($json.fields.personaKey || 'female_basic') + \"'\" }}",
+        "limit": 1,
+        "options": {}
+      },
+      "id": "get_persona",
+      "name": "Get Persona",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const patient = $items[0].json.fields;\nconst persona = $items[1].json.fields || {};\nconst timeData = $node['prepare_time'].json;\n\n// Parse medications\nlet medications = [];\ntry {\n  medications = JSON.parse(patient.medications || '[]');\n} catch (e) {\n  medications = [];\n}\n\n// Filter medications for current time\nconst currentMeds = medications.filter(med => {\n  const medHour = parseInt(med.time?.split(':')[0] || 0);\n  return Math.abs(medHour - timeData.hour) <= 2;\n});\n\n// Build medication list\nlet medList = '';\nif (currentMeds.length > 0) {\n  medList = currentMeds.map(med => `💊 ${med.drug}`).join('\\n');\n} else {\n  medList = '💊 ยาตามแพทย์สั่ง';\n}\n\n// Build message using persona\nconst pronoun = persona.pronoun || 'ค่ะ';\nconst greeting = timeData.greeting.replace('ค่ะ', pronoun);\n\nconst message = `${timeData.emoji} ${greeting}\\n\\nคุณ${patient.displayName} ${pronoun}\\nถึงเวลาทานยาแล้ว${pronoun}\\n\\n${medList}\\n\\nกดปุ่มด้านล่างเมื่อทานยาแล้วนะ${pronoun}`;\n\nreturn {\n  patientId: patient.patientId,\n  patientName: patient.patientName,\n  displayName: patient.displayName,\n  groupId: patient.groupId,\n  message,\n  timeSlot: timeData.timeSlot\n};"
+      },
+      "id": "build_message",
+      "name": "Build Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "push",
+        "pushTo": "groupId",
+        "groupId": "={{ $json.groupId }}",
+        "messages": [
+          {
+            "type": "text",
+            "text": "={{ $json.message }}",
+            "quickReply": {
+              "items": [
+                {
+                  "type": "action",
+                  "action": {
+                    "type": "message",
+                    "label": "✅ ทานยาแล้ว",
+                    "text": "ทานยาแล้ว"
+                  }
+                },
+                {
+                  "type": "action",
+                  "action": {
+                    "type": "message",
+                    "label": "⏰ เตือนใหม่ 30 นาที",
+                    "text": "เตือนใหม่"
+                  }
+                },
+                {
+                  "type": "action",
+                  "action": {
+                    "type": "message",
+                    "label": "❌ ข้ามมื้อนี้",
+                    "text": "ข้ามยา"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "id": "send_reminder",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.line",
+      "typeVersion": 1,
+      "position": [1450, 300],
+      "credentials": {
+        "lineApi": {
+          "id": "2",
+          "name": "LINE API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblpIFnGmNyVHHMER"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ $json.patientId }}"
+            },
+            {
+              "fieldName": "patientName",
+              "fieldValue": "={{ $json.patientName }}"
+            },
+            {
+              "fieldName": "taskType",
+              "fieldValue": "medication"
+            },
+            {
+              "fieldName": "value",
+              "fieldValue": "เตือนยา {{ $json.timeSlot }}"
+            },
+            {
+              "fieldName": "timestamp",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldName": "source",
+              "fieldValue": "system"
+            },
+            {
+              "fieldName": "note",
+              "fieldValue": "Reminder sent"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "log_reminder",
+      "name": "Log Reminder",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1650, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "3 Times Daily": {
+      "main": [
+        [
+          {
+            "node": "Prepare Time Slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Time Slot": {
+      "main": [
+        [
+          {
+            "node": "Get Active Patients with Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Patients with Group": {
+      "main": [
+        [
+          {
+            "node": "Split Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Batch": {
+      "main": [
+        [
+          {
+            "node": "Get Persona",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Persona": {
+      "main": [
+        [
+          {
+            "node": "Build Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Message": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "Log Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Reminder": {
+      "main": [
+        [
+          {
+            "node": "Split Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "health-buddy-reminder"
+  }
+}

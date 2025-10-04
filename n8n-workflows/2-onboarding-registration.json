@@ -1,0 +1,337 @@
+{
+  "name": "2. Onboarding Registration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "register",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_register",
+      "name": "Register Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "register"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate required fields\nconst required = ['userId', 'patientName', 'displayName'];\nconst data = $json.body || $json;\nconst missing = [];\n\nrequired.forEach(field => {\n  if (!data[field]) {\n    missing.push(field);\n  }\n});\n\nif (missing.length > 0) {\n  throw new Error(`Missing required fields: ${missing.join(', ')}`);\n}\n\n// Generate connection code\nconst timestamp = Date.now().toString(36).toUpperCase();\nconst random = Math.floor(Math.random() * 9000 + 1000);\nconst connectionCode = `${timestamp.slice(-4)}${random}`;\n\n// Generate patient ID\nconst patientId = Math.floor(Date.now() / 1000);\n\n// Set defaults\nreturn {\n  ...data,\n  patientId,\n  connectionCode,\n  gender: data.gender || 'female',\n  chronicDiseases: data.chronicDiseases || [],\n  medications: JSON.stringify(data.medications || []),\n  allergies: data.allergies || 'ไม่มี',\n  doctorName: data.doctorName || '',\n  hospital: data.hospital || '',\n  preferredActivities: data.preferredActivities || ['เดิน'],\n  exerciseLevel: data.exerciseLevel || 'low',\n  caregivers: JSON.stringify(data.caregivers || []),\n  personaKey: data.personaKey || 'female_basic',\n  tonePreference: data.tonePreference || 'formal',\n  noReplyHours: data.noReplyHours || 18,\n  alertPreference: data.alertPreference || 'primaryOnly',\n  active: true\n};"
+      },
+      "id": "prepare_data",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "app3u0M9H6SsZ0J6s"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblIJdbBY1D0l5AK7"
+        },
+        "fields": {
+          "fieldValues": [
+            {
+              "fieldName": "patientId",
+              "fieldValue": "={{ $json.patientId }}"
+            },
+            {
+              "fieldName": "userId",
+              "fieldValue": "={{ $json.userId }}"
+            },
+            {
+              "fieldName": "patientName",
+              "fieldValue": "={{ $json.patientName }}"
+            },
+            {
+              "fieldName": "displayName",
+              "fieldValue": "={{ $json.displayName }}"
+            },
+            {
+              "fieldName": "gender",
+              "fieldValue": "={{ $json.gender }}"
+            },
+            {
+              "fieldName": "dateOfBirth",
+              "fieldValue": "={{ $json.dateOfBirth }}"
+            },
+            {
+              "fieldName": "chronicDiseases",
+              "fieldValue": "={{ $json.chronicDiseases }}"
+            },
+            {
+              "fieldName": "medications",
+              "fieldValue": "={{ $json.medications }}"
+            },
+            {
+              "fieldName": "allergies",
+              "fieldValue": "={{ $json.allergies }}"
+            },
+            {
+              "fieldName": "doctorName",
+              "fieldValue": "={{ $json.doctorName }}"
+            },
+            {
+              "fieldName": "hospital",
+              "fieldValue": "={{ $json.hospital }}"
+            },
+            {
+              "fieldName": "nextAppointment",
+              "fieldValue": "={{ $json.nextAppointment }}"
+            },
+            {
+              "fieldName": "preferredActivities",
+              "fieldValue": "={{ $json.preferredActivities }}"
+            },
+            {
+              "fieldName": "exerciseLevel",
+              "fieldValue": "={{ $json.exerciseLevel }}"
+            },
+            {
+              "fieldName": "caregivers",
+              "fieldValue": "={{ $json.caregivers }}"
+            },
+            {
+              "fieldName": "connectionCode",
+              "fieldValue": "={{ $json.connectionCode }}"
+            },
+            {
+              "fieldName": "groupId",
+              "fieldValue": "={{ $json.groupId }}"
+            },
+            {
+              "fieldName": "personaKey",
+              "fieldValue": "={{ $json.personaKey }}"
+            },
+            {
+              "fieldName": "tonePreference",
+              "fieldValue": "={{ $json.tonePreference }}"
+            },
+            {
+              "fieldName": "noReplyHours",
+              "fieldValue": "={{ $json.noReplyHours }}"
+            },
+            {
+              "fieldName": "alertPreference",
+              "fieldValue": "={{ $json.alertPreference }}"
+            },
+            {
+              "fieldName": "active",
+              "fieldValue": "={{ $json.active }}"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "create_patient",
+      "name": "Create Patient",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.userId }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "has_line",
+      "name": "Has LINE ID?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "push",
+        "pushTo": "userId",
+        "userId": "={{ $node['Prepare Data'].json.userId }}",
+        "messages": [
+          {
+            "type": "text",
+            "text": "🎊 ลงทะเบียนสำเร็จ!\n\n👤 ผู้ป่วย: {{ $node['Prepare Data'].json.displayName }}\n🔑 รหัสเชื่อมต่อ: {{ $node['Prepare Data'].json.connectionCode }}\n\n📝 ขั้นตอนต่อไป:\n1. เพิ่ม Health Buddy เข้ากลุ่ม LINE\n2. พิมพ์ #connect {{ $node['Prepare Data'].json.connectionCode }}\n3. ระบบจะเชื่อมต่ออัตโนมัติ\n\n⚠️ รหัสนี้ใช้ได้ 24 ชั่วโมง"
+          }
+        ]
+      },
+      "id": "send_line",
+      "name": "Send LINE Message",
+      "type": "n8n-nodes-base.line",
+      "typeVersion": 1,
+      "position": [1050, 250],
+      "credentials": {
+        "lineApi": {
+          "id": "2",
+          "name": "LINE API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "message",
+              "value": "Patient registered successfully"
+            },
+            {
+              "name": "patientId",
+              "value": "={{ $node['Create Patient'].json.fields.patientId }}"
+            },
+            {
+              "name": "connectionCode",
+              "value": "={{ $node['Create Patient'].json.fields.connectionCode }}"
+            },
+            {
+              "name": "recordId",
+              "value": "={{ $node['Create Patient'].json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "success_response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {},
+      "id": "merge",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Register Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Create Patient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Patient": {
+      "main": [
+        [
+          {
+            "node": "Has LINE ID?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has LINE ID?": {
+      "main": [
+        [
+          {
+            "node": "Send LINE Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send LINE Message": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success Response": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "health-buddy-register"
+  }
+}
